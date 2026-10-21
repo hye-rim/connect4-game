@@ -1,0 +1,201 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>커넥트4</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Jua&display=swap" rel="stylesheet">
+<style>
+  /* 아이폰 사파리는 -webkit- 접두사를 붙여야 알아듣는다: 버튼을 누르다 글자가 파랗게 선택(블록)되거나
+     길게 눌러 복사 메뉴가 뜨지 않게. 입력칸은 그대로 선택·붙여넣기 되게 둔다 */
+  *, *::before, *::after { -webkit-user-select:none; user-select:none; -webkit-touch-callout:none; }
+  input, textarea, [contenteditable] { -webkit-user-select:text; user-select:text; -webkit-touch-callout:default; }
+
+  /* 작은 오락실 공통 스티커 스타일: 진한 남보라 테두리 + 아래로 떨어진 그림자 */
+  :root { --ink:#2b1d52; --yellow:#ffd23f; --pink:#ff5fa2; --sky:#4f8cff; --muted:#6b5c95; }
+  * { margin:0; padding:0; box-sizing:border-box; -webkit-tap-highlight-color:transparent; user-select:none; }
+  html, body {
+    width:100%; height:100%; overflow:hidden;
+    background:
+      repeating-linear-gradient(-30deg, rgba(255,255,255,.07) 0 26px, transparent 26px 56px),
+      linear-gradient(180deg, #4f8cff 0%, #6b5cff 55%, #8a4fe0 100%);
+    font-family:'Jua', -apple-system, 'Apple SD Gothic Neo', 'Malgun Gothic', sans-serif;
+    color:var(--ink);
+    touch-action:none;
+  }
+  #stage {
+    width:100%; height:100%;
+    display:flex; flex-direction:column; align-items:center; justify-content:center;
+    padding:8px;
+  }
+
+  /* 위: 상태 + 버튼 줄, 그 아래 흑 VS 백 */
+  #topbar { display:flex; align-items:center; gap:8px; padding:0 2px 10px; }
+  #status {
+    flex:1; min-width:0; text-align:left; font-size:18px; color:#fff;
+    paint-order:stroke fill; -webkit-text-stroke:5px var(--ink); text-shadow:0 3px 0 var(--ink);
+    white-space:nowrap; overflow:hidden; text-overflow:ellipsis; padding:4px 2px;
+  }
+  #status.warn { color:#ffb3c4; }
+  #topbar .icons { display:flex; gap:6px; }
+  #topbar button {
+    background:#fff; border:3px solid var(--ink); color:var(--ink);
+    width:38px; height:38px; border-radius:13px; font-size:16px; cursor:pointer; font-family:inherit;
+    box-shadow:0 4px 0 var(--ink);
+  }
+  #topbar button:active:not(:disabled) { transform:translateY(3px); box-shadow:0 1px 0 var(--ink); }
+  #topbar button:disabled { opacity:.45; cursor:default; }
+  #hud { display:flex; align-items:center; gap:8px; padding:0 0 12px; }
+  .vs { flex:none; font-size:18px; color:var(--yellow); paint-order:stroke fill; -webkit-text-stroke:5px var(--ink); }
+  .player {
+    flex:1; min-width:0;
+    display:flex; align-items:center; gap:8px;
+    padding:4px 12px 4px 5px; border-radius:999px;
+    background:#fff; border:3px solid var(--ink); box-shadow:0 4px 0 var(--ink);
+    transition:background .2s, transform .2s;
+  }
+  .player#p2 { flex-direction:row-reverse; padding:4px 5px 4px 12px; text-align:right; }
+  .player.turn { background:var(--yellow); transform:translateY(-2px); }
+  .player .stone { width:26px; height:26px; border-radius:50%; flex:none; border:2.5px solid var(--ink); }
+  .player .stone.b { background:radial-gradient(circle at 35% 30%, #ffb3c0, #ff5f7a 55%, #c4264a); }
+  .player .stone.w { background:radial-gradient(circle at 35% 30%, #fff3b0, #ffd23f 55%, #d99a00); }
+  .player .name { flex:1; min-width:0; font-size:16px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .player .cnt { flex:none; min-width:30px; text-align:center; font-size:22px; font-variant-numeric:tabular-nums; background:var(--ink); color:#fff; border-radius:999px; padding:0 8px; line-height:28px; }
+  .player.turn .cnt { background:var(--pink); }
+
+  #wrap { position:relative; }
+  #game {
+    display:block;
+    border-radius:18px;
+    box-shadow:0 0 0 4px var(--ink), 0 9px 0 4px var(--ink), 0 22px 40px rgba(0,0,0,.35);
+    touch-action:none;
+    cursor:pointer;
+  }
+
+  /* 메뉴·결과 */
+  #overlay {
+    position:absolute; inset:0;
+    display:flex; flex-direction:column; align-items:center; justify-content:safe center; gap:12px;
+    text-align:center; padding:20px 16px;
+    background:rgba(43,29,82,.6);
+    border-radius:18px;
+    overflow-y:auto;
+    backdrop-filter:blur(3px);
+  }
+  #overlay.hidden { display:none; }
+  #overlay h1, #overlay h2, #overlay .code {
+    color:#fff; font-weight:400; paint-order:stroke fill; -webkit-text-stroke:6px var(--ink); text-shadow:0 5px 0 var(--ink);
+  }
+  #overlay h1 { font-size:clamp(44px, 13vw, 60px); line-height:1; }
+  #overlay h1 .y { color:var(--yellow); }
+  #overlay h1 .r { color:#ff7a93; }
+  #overlay h2 { font-size:32px; }
+  #overlay p { font-size:15px; color:#fff; line-height:1.55; }
+  #overlay p b { color:var(--yellow); font-weight:400; }
+  #overlay .help { font-size:13px; color:#fff; opacity:.85; line-height:1.7; }
+  #overlay .group { display:flex; flex-direction:column; align-items:center; gap:6px; }
+  #overlay .label { font-size:14px; color:#fff; }
+  #overlay .seg {
+    display:flex; background:#fff; border:3px solid var(--ink); border-radius:999px; padding:3px; gap:2px;
+    box-shadow:0 4px 0 var(--ink);
+  }
+  #overlay .seg button {
+    background:none; border:none; color:var(--muted); font-size:16px; font-family:inherit;
+    padding:6px 13px; border-radius:999px; cursor:pointer;
+  }
+  #overlay .seg button.on { background:var(--sky); color:#fff; }
+  #overlay .record {
+    font-size:14px; color:var(--ink); min-height:1em; font-variant-numeric:tabular-nums;
+    background:var(--yellow); border:2px solid var(--ink); border-radius:999px; padding:1px 10px;
+  }
+  #overlay .record:empty { display:none; }
+  #overlay .row { display:flex; gap:10px; flex-wrap:wrap; justify-content:center; }
+  #overlay .main {
+    margin-top:4px;
+    background:var(--yellow); color:var(--ink); font-size:22px; font-family:inherit;
+    border:3px solid var(--ink); border-radius:999px; padding:10px 34px;
+    box-shadow:0 5px 0 var(--ink); cursor:pointer;
+  }
+  #overlay .main:active { transform:translateY(4px); box-shadow:0 1px 0 var(--ink); }
+  #overlay .sub {
+    margin-top:4px;
+    background:#fff; color:var(--ink); font-size:16px; font-family:inherit;
+    border:3px solid var(--ink); border-radius:999px; padding:7px 18px;
+    box-shadow:0 4px 0 var(--ink); cursor:pointer;
+  }
+  #overlay .sub:active { transform:translateY(3px); box-shadow:0 1px 0 var(--ink); }
+  #overlay .modes { display:flex; flex-direction:column; gap:14px; width:100%; max-width:310px; margin-top:6px; }
+  #overlay .mode {
+    display:grid; grid-template-columns:54px 1fr; grid-template-rows:auto auto; align-items:center;
+    text-align:left; column-gap:12px;
+    background:#fff; border:3px solid var(--ink); border-radius:20px; box-shadow:0 6px 0 var(--ink);
+    padding:10px 14px; color:var(--ink); cursor:pointer; font-family:inherit;
+  }
+  #overlay .mode:active { transform:translateY(4px); box-shadow:0 2px 0 var(--ink); }
+  #overlay .mode .ico {
+    grid-row:span 2; width:54px; height:54px; display:grid; place-items:center; font-size:30px;
+    background:var(--yellow); border:3px solid var(--ink); border-radius:16px;
+  }
+  #overlay .mode:nth-child(2) .ico { background:#a8dcff; }
+  #overlay .mode b { font-size:21px; font-weight:400; }
+  #overlay .mode small { font-size:13px; color:var(--muted); font-family:-apple-system, 'Apple SD Gothic Neo', sans-serif; }
+  #overlay input {
+    background:#fff; border:3px solid var(--ink); color:var(--ink); box-shadow:0 4px 0 var(--ink);
+    font-size:18px; font-family:inherit; text-align:center;
+    border-radius:999px; padding:8px 16px; width:210px; user-select:text; outline:none;
+  }
+  #overlay input::placeholder { color:#a99fc9; }
+  #overlay input:focus { box-shadow:0 4px 0 var(--ink), 0 0 0 4px rgba(255,210,63,.6); }
+  #overlay .join input { width:124px; letter-spacing:.2em; text-transform:uppercase; }
+  #overlay .join .sub { margin-top:0; }
+  #overlay .error { font-size:15px; color:#ffb3c4; min-height:1em; paint-order:stroke fill; -webkit-text-stroke:4px var(--ink); }
+  #overlay .back { background:none; border:none; color:#fff; font-size:16px; cursor:pointer; padding:6px; font-family:inherit; opacity:.9; }
+  #overlay .code { font-size:56px; letter-spacing:.16em; color:var(--yellow); font-variant-numeric:tabular-nums; -webkit-user-select:text; user-select:text; -webkit-touch-callout:default; }
+  #overlay .dots { display:flex; gap:10px; }
+  #overlay .dots span { width:14px; height:14px; border-radius:50%; background:var(--yellow); border:3px solid var(--ink); animation:blink 1.2s infinite; }
+  #overlay .dots span:nth-child(2) { animation-delay:.2s; }
+  #overlay .dots span:nth-child(3) { animation-delay:.4s; }
+  @keyframes blink { 0%, 80%, 100% { opacity:.25; transform:scale(.85); } 40% { opacity:1; transform:scale(1); } }
+  /* 기기에 맞는 설명만: 폰(손가락)은 .touch, PC(마우스·키보드)는 .pc */
+  .pc { display:none; }
+  @media (pointer:fine) { .pc { display:inline; } .touch { display:none; } }
+  /* 폰: 메뉴·결과 창은 화면 전체로 (작은 판 안에 넣으면 버튼이 잘린다) */
+  @media (max-width:520px) {
+    #overlay { position:fixed; inset:0; z-index:50; border-radius:0; height:100dvh; background:rgba(43,29,82,.88); padding:16px 14px; }
+  }
+  @media (max-width:420px) { .player { gap:6px; padding-right:9px; } .player#p2 { padding-left:9px; } .player .name { font-size:15px; } }
+  @media (max-height:700px) {
+    #overlay { gap:8px; }
+    #overlay h1 { font-size:42px; } #overlay h2 { font-size:26px; }
+    #overlay .mode { padding:7px 12px; } #overlay .mode .ico { width:46px; height:46px; font-size:26px; }
+  }
+</style>
+</head>
+<body>
+<div id="stage">
+  <div id="col">
+    <div id="topbar">
+      <div id="status"></div>
+      <div class="icons">
+        <button id="undoBtn" title="무르기 (Z)">↩</button>
+        <button id="muteBtn" title="소리 (M)">🔊</button>
+        <button id="menuBtn" title="메뉴 (Esc)">☰</button>
+      </div>
+    </div>
+    <div id="hud">
+      <div class="player" id="p1"><span class="stone b"></span><span class="name" id="n1">빨강</span><span class="cnt" id="c1">0</span></div>
+      <span class="vs">VS</span>
+      <div class="player" id="p2"><span class="stone w"></span><span class="name" id="n2">노랑</span><span class="cnt" id="c2">0</span></div>
+    </div>
+    <div id="wrap">
+      <canvas id="game"></canvas>
+      <div id="overlay"></div>
+    </div>
+  </div>
+</div>
+<script src="rules.js"></script>
+<script src="game.js"></script>
+</body>
+</html>
